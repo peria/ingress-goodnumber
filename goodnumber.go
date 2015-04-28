@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 
 	"appengine"
 )
@@ -32,10 +33,9 @@ const pageTemplate = `<!doctype html>
 const (
 	generatorCap = 10
 	pattenrsCap  = 20
-	maxUint      = ^uint(0)
 )
 
-var apGain = []uint{
+var apGain = []int64{
 	// 2813, // Create double CF
 	1750, // Full deploy
 	1563, // Create a CF
@@ -53,26 +53,33 @@ var apGain = []uint{
 
 // StatusRequest is a struct defining input data.
 type StatusRequest struct {
-	AP uint `json:"ap"`
+	AP int64 `json:"ap"`
 }
 
 // RestActionResponse is a struct defining output data to client.
 type RestActionResponse struct {
-	Target uint `json:"target"`
-	// CreateDoubleCF uint `json:"create double control field"`
-	FullDeploy    uint `json:"full deploy"`
-	CreateCF      uint `json:"create control field"`
-	DestroyCF     uint `json:"destroy control field"`
-	CapturePortal uint `json:"capture portal"`
-	CompPortal    uint `json:"complete portal"`
-	CreateLink    uint `json:"create link"`
-	DestroyLink   uint `json:"destroy link"`
-	PlaceRes      uint `json:"place resonator"`
-	Hack          uint `json:"hack portal"`
-	DestroyRes    uint `json:"destroy resonator"`
-	UpgradeRes    uint `json:"upgrade resonator"`
-	Recharge      uint `json:"recharge"`
+	Target int64 `json:"target"`
+	// CreateDoubleCF int64 `json:"create double control field"`
+	FullDeploy    int64 `json:"full deploy"`
+	CreateCF      int64 `json:"create control field"`
+	DestroyCF     int64 `json:"destroy control field"`
+	CapturePortal int64 `json:"capture portal"`
+	CompPortal    int64 `json:"complete portal"`
+	CreateLink    int64 `json:"create link"`
+	DestroyLink   int64 `json:"destroy link"`
+	PlaceRes      int64 `json:"place resonator"`
+	Hack          int64 `json:"hack portal"`
+	DestroyRes    int64 `json:"destroy resonator"`
+	UpgradeRes    int64 `json:"upgrade resonator"`
+	Recharge      int64 `json:"recharge"`
 }
+
+// Define Int64Slice to sort int64 values
+type Int64Slice []int64
+
+func (s Int64Slice) Len() int           { return len(s) }
+func (s Int64Slice) Less(i, j int) bool { return s[i] < s[j] }
+func (s Int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func init() {
 	http.HandleFunc("/", handler)
@@ -120,7 +127,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewRestActionResponse converts AP list into a struct.
-func NewRestActionResponse(target uint, pattern map[uint]uint) *RestActionResponse {
+func NewRestActionResponse(target int64, pattern map[int64]int64) *RestActionResponse {
 	return &RestActionResponse{
 		Target: target,
 		// CreateDoubleCF: pattern[2813],
@@ -138,11 +145,11 @@ func NewRestActionResponse(target uint, pattern map[uint]uint) *RestActionRespon
 	}
 }
 
-func genGoodNumbers(ap uint) <-chan uint {
-	gn := make(chan uint, generatorCap)
-	go func(num uint) {
+func genGoodNumbers(ap int64) <-chan int64 {
+	gn := make(chan int64, generatorCap)
+	go func(num int64) {
 		digit := numDigits(num)
-		round := uint(math.Pow10(digit))
+		round := int64(math.Pow10(digit))
 		repdigit := repdigitOf(digit)
 		seqdigit := seqdigitOf(digit)
 
@@ -151,34 +158,36 @@ func genGoodNumbers(ap uint) <-chan uint {
 
 		nearestRound := round * roundbase
 		nearestRep := repdigit * repbase
-		var nearestSeq uint
+		var nearestSeq int64
 		if seqdigit > num {
 			nearestSeq = seqdigit
 		} else {
 			nearestSeq = seqdigitOf(digit + 1)
 		}
-		x, y, z := min3(nearestRound, nearestRep, nearestSeq)
-		gn <- x
-		gn <- y
-		gn <- z
+
+		nearValues := Int64Slice([]int64{nearestRound, nearestRep, nearestSeq})
+		sort.Sort(nearValues)
+		for _, value := range nearValues {
+			gn <- value
+		}
 	}(ap)
 	return gn
 }
 
-func findPattern(ap, target uint) map[uint]uint {
+func findPattern(ap, target int64) map[int64]int64 {
 	gap := target - ap
-	patterns := make([]uint, gap+1)
-	track := make([]uint, gap+1)
+	patterns := make([]int64, gap+1)
+	track := make([]int64, gap+1)
 
 	// initialize
-	for i := uint(0); i < gap+1; i++ {
-		patterns[i] = maxUint
+	for i := int64(0); i < gap+1; i++ {
+		patterns[i] = math.MaxInt64
 	}
 	patterns[0] = 0
 
 	// find solution
-	for i := uint(0); i < gap+1; i++ {
-		min := maxUint
+	for i := int64(0); i < gap+1; i++ {
+		min := int64(math.MaxInt64)
 		for _, n := range apGain {
 			k := i - n
 			if k >= 0 && k < i {
@@ -192,7 +201,7 @@ func findPattern(ap, target uint) map[uint]uint {
 	}
 
 	// find pattern
-	if patterns[gap] != maxUint {
+	if patterns[gap] != math.MaxInt64 {
 		result := createCounterMap()
 		for p := gap; ; p = track[p] {
 			if track[p] == 0 {
@@ -207,7 +216,7 @@ func findPattern(ap, target uint) map[uint]uint {
 }
 
 // Find order of exponent
-func numDigits(num uint) int {
+func numDigits(num int64) int {
 	digit := 0
 	for {
 		num = num / 10
@@ -220,8 +229,8 @@ func numDigits(num uint) int {
 }
 
 // repdigitOf returns repdigit with `digit` digits
-func repdigitOf(digit int) uint {
-	num := uint(1)
+func repdigitOf(digit int) int64 {
+	num := int64(1)
 	for i := 0; i < digit; i++ {
 		num = num*10 + 1
 	}
@@ -229,38 +238,18 @@ func repdigitOf(digit int) uint {
 }
 
 // seqdigitOf returns sequential number with `digit` digits
-func seqdigitOf(digit int) uint {
-	num := uint(1)
-	for i := uint(0); i < uint(digit); i++ {
+func seqdigitOf(digit int) int64 {
+	num := int64(1)
+	for i := int64(0); i < int64(digit); i++ {
 		num = num*10 + (i+2)%10
 	}
 	return num
 }
 
-// min3 sorts 3 assingments and return them in acsending order
-func min3(x, y, z uint) (uint, uint, uint) {
-	if x < y {
-		if x < z {
-			if y < z {
-				return x, y, z
-			}
-			return x, z, y
-		}
-		return z, x, y
-	}
-	if z < x {
-		if z < y {
-			return z, y, x
-		}
-		return y, z, x
-	}
-	return y, x, z
-}
-
-func createCounterMap() map[uint]uint {
-	counter := make(map[uint]uint)
+func createCounterMap() map[int64]int64 {
+	counter := make(map[int64]int64)
 	for _, k := range apGain {
-		counter[k] = uint(0)
+		counter[k] = int64(0)
 	}
 	return counter
 }
