@@ -153,8 +153,9 @@ func genGoodNumbers(ap int64) <-chan int64 {
 		nearestRound := genRound(num)
 		nearestRep := genRepDigit(num)
 		nearestSeq := genSeqDigit(num)
+		nearestPi := genPiDigit(num)
 
-		nearValues := Int64Slice([]int64{nearestRound, nearestRep, nearestSeq})
+		nearValues := Int64Slice([]int64{nearestRound, nearestRep, nearestSeq, nearestPi})
 		sort.Sort(nearValues)
 		for _, value := range nearValues {
 			gn <- value
@@ -163,6 +164,7 @@ func genGoodNumbers(ap int64) <-chan int64 {
 	return gn
 }
 
+// TODO: Speed up this function. (It works fast enough for actual values, though.)
 func findPattern(ap, target int64) map[int64]int64 {
 	gap := target - ap
 	patterns := make([]int64, gap+1)
@@ -190,8 +192,8 @@ func findPattern(ap, target int64) map[int64]int64 {
 	}
 
 	// find pattern
+	result := createCounterMap()
 	if patterns[gap] != math.MaxInt64 {
-		result := createCounterMap()
 		for p := gap; ; p = track[p] {
 			if track[p] == 0 {
 				result[p]++
@@ -199,9 +201,8 @@ func findPattern(ap, target int64) map[int64]int64 {
 			}
 			result[p-track[p]]++
 		}
-		return result
 	}
-	return createCounterMap()
+	return result
 }
 
 // genRound returns the minimum rounded number > `ap`
@@ -235,6 +236,16 @@ func genSeqDigit(ap int64) int64 {
 	num := int64(1)
 	for i := int64(2); num <= ap; i++ {
 		num = num*10 + i%10
+	}
+	return num
+}
+
+// genPiDigit returns the minimum pi-digit number > `ap`, like 314159
+func genPiDigit(ap int64) int64 {
+	// Maxium candidate
+	num := int64(3141592653589793238)
+	for num/10 >= ap {
+		num = num / 10
 	}
 	return num
 }
