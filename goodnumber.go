@@ -167,25 +167,32 @@ func genGoodNumbers(ap int64) <-chan int64 {
 // TODO: Speed up this function. (It works fast enough for actual values, though.)
 func findPattern(ap, target int64) map[int64]int64 {
 	gap := target - ap
-	patterns := make([]int64, gap+1)
+	if gap > 100000000 {
+		// Do not compute to avoid wasting resources.
+		return createCounterMap()
+	}
+	dp := make([]int64, gap+1)
 	track := make([]int64, gap+1)
 
 	// initialize
-	for i := int64(0); i < gap+1; i++ {
-		patterns[i] = math.MaxInt64
+	for i := int64(0); i <= gap; i++ {
+		dp[i] = math.MaxInt64
 	}
-	patterns[0] = 0
+	dp[0] = 0
 
 	// find solution
 	for i := int64(0); i < gap+1; i++ {
-		min := int64(math.MaxInt64)
+		if dp[i] == math.MaxInt64 {
+			continue
+		}
+
+		step := dp[i] + 1
 		for _, n := range apGain {
-			k := i - n
-			if k >= 0 && k < i {
-				if patterns[k] < min {
-					min = patterns[k]
-					patterns[i] = patterns[k] + 1
-					track[i] = k
+			k := i + n
+			if k <= gap {
+				if step < dp[k] {
+					dp[k] = step
+					track[k] = i
 				}
 			}
 		}
@@ -193,12 +200,8 @@ func findPattern(ap, target int64) map[int64]int64 {
 
 	// find pattern
 	result := createCounterMap()
-	if patterns[gap] != math.MaxInt64 {
-		for p := gap; ; p = track[p] {
-			if track[p] == 0 {
-				result[p]++
-				break
-			}
+	if dp[gap] != math.MaxInt64 {
+		for p := gap; p > 0; p = track[p] {
 			result[p-track[p]]++
 		}
 	}
@@ -242,7 +245,7 @@ func genSeqDigit(ap int64) int64 {
 
 // genPiDigit returns the minimum pi-digit number > `ap`, like 314159
 func genPiDigit(ap int64) int64 {
-	// Maxium candidate
+	// Maxium candidate in int64
 	num := int64(3141592653589793238)
 	for num/10 >= ap {
 		num = num / 10
