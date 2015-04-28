@@ -115,6 +115,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	gn := genGoodNumbers(status.AP)
 	c.Infof("AP: %v", status.AP)
 	target := <-gn
+
 	pattern := findPattern(status.AP, target)
 	action := NewRestActionResponse(target, pattern)
 	resp, err := json.Marshal(action)
@@ -123,6 +124,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		c.Errorf("%v", err.Error())
 		return
 	}
+	c.Infof("%v", string(resp))
 	fmt.Fprintf(w, "%v", string(resp))
 }
 
@@ -148,22 +150,9 @@ func NewRestActionResponse(target int64, pattern map[int64]int64) *RestActionRes
 func genGoodNumbers(ap int64) <-chan int64 {
 	gn := make(chan int64, generatorCap)
 	go func(num int64) {
-		digit := numDigits(num)
-		round := int64(math.Pow10(digit))
-		repdigit := repdigitOf(digit)
-		seqdigit := seqdigitOf(digit)
-
-		roundbase := num/round + 1
-		repbase := num/repdigit + 1
-
-		nearestRound := round * roundbase
-		nearestRep := repdigit * repbase
-		var nearestSeq int64
-		if seqdigit > num {
-			nearestSeq = seqdigit
-		} else {
-			nearestSeq = seqdigitOf(digit + 1)
-		}
+		nearestRound := genRound(num)
+		nearestRep := genRepDigit(num)
+		nearestSeq := genSeqDigit(num)
 
 		nearValues := Int64Slice([]int64{nearestRound, nearestRep, nearestSeq})
 		sort.Sort(nearValues)
@@ -215,6 +204,41 @@ func findPattern(ap, target int64) map[int64]int64 {
 	return createCounterMap()
 }
 
+// genRound returns the minimum rounded number > `ap`
+func genRound(ap int64) int64 {
+	digit := numDigits(ap)
+	round := int64(math.Pow10(digit))
+	return ((ap / round) + 1) * round
+}
+
+// genRepDigit returns the minimum rep-digit number > `ap`
+func genRepDigit(ap int64) int64 {
+	// Make a rep-unit number (11...11).
+	digit := numDigits(ap)
+	ru := int64(1)
+	for i := 0; i < digit; i++ {
+		ru = ru*10 + 1
+	}
+	// Change the digits. (22...22, 33...33, ...)
+	for i := int64(1); i < 10; i++ {
+		val := ru * i
+		if val > ap {
+			return val
+		}
+	}
+	// In case ap == 99..99, return 111..11.
+	return ru*10 + 1
+}
+
+// genSeqDigit returns the minimum sequencial digit number > `ap`
+func genSeqDigit(ap int64) int64 {
+	num := int64(1)
+	for i := int64(2); num <= ap; i++ {
+		num = num*10 + i%10
+	}
+	return num
+}
+
 // Find order of exponent
 func numDigits(num int64) int {
 	digit := 0
@@ -226,24 +250,6 @@ func numDigits(num int64) int {
 		digit++
 	}
 	return digit
-}
-
-// repdigitOf returns repdigit with `digit` digits
-func repdigitOf(digit int) int64 {
-	num := int64(1)
-	for i := 0; i < digit; i++ {
-		num = num*10 + 1
-	}
-	return num
-}
-
-// seqdigitOf returns sequential number with `digit` digits
-func seqdigitOf(digit int) int64 {
-	num := int64(1)
-	for i := int64(0); i < int64(digit); i++ {
-		num = num*10 + (i+2)%10
-	}
-	return num
 }
 
 func createCounterMap() map[int64]int64 {
